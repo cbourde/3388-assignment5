@@ -230,12 +230,55 @@ class MarchingCubes{
 		}
 };
 
-std::vector<float> marching_cubes(std::function<float(float, float, float)> f, float isoval, float min, float max, float step, CubesMode mode){
-	std::vector<float> vertices;
-}
-
-
 int main(){
+	// Command line args for step size, min, max, iso
+
+	// Initialize window
+	if (!glfwInit()){
+		printf("Failed to initialize GLFW\n");
+		return -1;
+	}
+	glfwWindowHint(GLFW_SAMPLES, 4);
+	window = glfwCreateWindow(1000, 1000, "Assignment 5", NULL, NULL);
+	if (window == NULL){
+		printf("Failed to open window\n");
+		glfwTerminate();
+		return -1;
+	}
+	glfwMakeContextCurrent(window);
+
+	// Initialize GLEW
+	glewExperimental = true;
+	if (glewInit() != GLEW_OK){
+		printf("Failed to initialize GLEW\n");
+		glfwTerminate();
+		return -1;
+	}
+
+	glClearColor(0, 0, 0, 1);
+
+	// Set up initial MVP matrix
+	glm::mat4 mvp;
+	glm::vec3 eyePos(5, 5, 5);
+	glm::vec3 zero(0, 0, 0);
+	glm::vec3 up(0, 1, 0);
+	glm::mat4 view = glm::lookAt(eyePos, zero, up);
+	glm::mat4 projection = glm::perspective(glm::radians(45.0f), 1.0f, 0.001f, 1000.0f);
+	glm::mat4 model = glm::mat4(1.0f);
+	mvp = projection * view * model;
+
+	
+
+	while (!glfwWindowShouldClose(window)){
+		// Process input for camera movement
+		// eyePos = ...
+		// view = lookAt(eyePos, zero, up);
+		// mvp = projection * view * model;
+
+
+		glfwPollEvents();
+		glfwSwapBuffers(window);
+	}
 
 	return 0;
 }
