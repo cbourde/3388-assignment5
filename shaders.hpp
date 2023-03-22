@@ -4,7 +4,7 @@ char const *vertexShader = "\
 layout(location = 0) in vec3 vertexPosition;\n\
 layout(location = 1) in vec3 normal;\n\
 // Output data ; will be interpolated for each fragment.\n\
-out vec2 vertex_normal;\n\
+out vec3 vertex_normal;\n\
 // Values that stay constant for the whole mesh.\n\
 uniform mat4 MVP;\n\
 void main(){ \n\
@@ -20,5 +20,5 @@ in vec3 vertex_normal; \n\
 out vec4 color; \n\
 uniform sampler2D tex;\n\
 void main() {\n\
-	color = vec4(vertex_normal, 1.0f);\n\
+	color = vec4((vertex_normal.x + 1) / 2, (vertex_normal.y + 1) / 2, (vertex_normal.z + 1) / 2, 1.0f);\n\
 }\n\0";

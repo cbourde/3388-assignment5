@@ -12,8 +12,8 @@
 #include <glm/gtx/string_cast.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
-#include <TriTable.hpp>
-#include <shaders.hpp>
+#include "TriTable.hpp"
+#include "shaders.hpp"
 
 // Corner definitions
 #define BOTTOM_BACK_LEFT	1
@@ -22,19 +22,24 @@
 #define BOTTOM_FRONT_LEFT	8
 #define TOP_BACK_LEFT		16
 #define TOP_BACK_RIGHT		32
-#define TOP_FRONT_LEFT		64
-#define TOP_FRONT_RIGHT		128
+#define TOP_FRONT_RIGHT		64
+#define TOP_FRONT_LEFT		128
 
 // Function that generates the surface
 float f(float x, float y, float z){
 	return y - (sin(x) * cos(z));
 }
 
+float f2(float x, float y, float z){
+	return x;
+}
+
 // Default parameters
-const float DEFAULT_ISO = 0.1f;
+const float DEFAULT_ISO = 0.05f;
 const float DEFAULT_MIN = -3.0f;
 const float DEFAULT_MAX = 3.0f;
-const float DEFAULT_STEP = 0.01f;
+const float DEFAULT_STEP = 0.02f;
+const float ZOOM_SPEED = 2.0f;
 
 GLFWwindow* window;
 
@@ -48,6 +53,8 @@ enum CubesMode{
 	Incremental_Z
 };
 
+// Different comparisons to use when testing if a point is inside.
+// IDK if this is actually useful
 enum CompareOperation{
 	Less,
 	LessEqual,
@@ -58,12 +65,13 @@ enum CompareOperation{
 // Handles marching cubes mesh generation
 class MarchingCubes{
 		CubesMode generationMode = Full;
-		CompareOperation comparator = GreaterEqual;
+		CompareOperation comparator = Less;
 		std::function<float(float, float, float)> generationFunction;
 		float isoValue = 0;
 		float minCoord = 0;
 		float maxCoord = 1;
-		float stepSize = 0.01;
+		float stepSize = 0.1;
+		float currentIteration = 0;
 		std::vector<float> vertices;
 
 		// Generates the entire mesh (non-incremental)
@@ -101,6 +109,102 @@ class MarchingCubes{
 				}
 			}
 			finished = true;
+		}
+
+		// Generates one slice of the mesh
+		void generateIterative(){
+			float bbl, bbr, bfr, bfl, tbl, tbr, tfr, tfl;
+			int index;
+			int* verts;
+			
+			for (float a = minCoord; a <= maxCoord; a += stepSize){
+				for (float b = minCoord; b <= maxCoord; b += stepSize){
+					switch (generationMode){
+						case Incremental_X:
+							// A is Y, B is Z
+							// Test the 8 points
+							bbl = generationFunction(currentIteration, a, b);
+							bbr = generationFunction(currentIteration + stepSize, a, b);
+							bfr = generationFunction(currentIteration + stepSize, a, b + stepSize);
+							bfl = generationFunction(currentIteration, a, b + stepSize);
+							tbl = generationFunction(currentIteration, a + stepSize, b);
+							tbr = generationFunction(currentIteration + stepSize, a + stepSize, b);
+							tfr = generationFunction(currentIteration + stepSize, a + stepSize, b + stepSize);
+							tfl = generationFunction(currentIteration, a + stepSize, b + stepSize);
+
+							index = 0;
+							if (test(bbl)) index |= BOTTOM_BACK_LEFT;
+							if (test(bbr)) index |= BOTTOM_BACK_RIGHT;
+							if (test(bfr)) index |= BOTTOM_FRONT_RIGHT;
+							if (test(bfl)) index |= BOTTOM_FRONT_LEFT;
+							if (test(tbl)) index |= TOP_BACK_LEFT;
+							if (test(tbr)) index |= TOP_BACK_RIGHT;
+							if (test(tfr)) index |= TOP_FRONT_RIGHT;
+							if (test(tfl)) index |= TOP_FRONT_LEFT;
+
+							verts = marching_cubes_lut[index];
+							add_triangles(verts, currentIteration, a, b);
+							break;
+						case Incremental_Y:
+							// A is X, B is Z
+							// Test the 8 points
+							bbl = generationFunction(a, currentIteration, b);
+							bbr = generationFunction(a + stepSize, currentIteration, b);
+							bfr = generationFunction(a + stepSize, currentIteration, b + stepSize);
+							bfl = generationFunction(a, currentIteration, b + stepSize);
+							tbl = generationFunction(a, currentIteration + stepSize, b);
+							tbr = generationFunction(a + stepSize, currentIteration + stepSize, b);
+							tfr = generationFunction(a + stepSize, currentIteration + stepSize, b + stepSize);
+							tfl = generationFunction(a, currentIteration + stepSize, b + stepSize);
+
+							index = 0;
+							if (test(bbl)) index |= BOTTOM_BACK_LEFT;
+							if (test(bbr)) index |= BOTTOM_BACK_RIGHT;
+							if (test(bfr)) index |= BOTTOM_FRONT_RIGHT;
+							if (test(bfl)) index |= BOTTOM_FRONT_LEFT;
+							if (test(tbl)) index |= TOP_BACK_LEFT;
+							if (test(tbr)) index |= TOP_BACK_RIGHT;
+							if (test(tfr)) index |= TOP_FRONT_RIGHT;
+							if (test(tfl)) index |= TOP_FRONT_LEFT;
+
+							verts = marching_cubes_lut[index];
+							add_triangles(verts, a, currentIteration, b);
+							break;
+						case Incremental_Z:
+							// A is X, B is Y
+							// Test the 8 points
+							bbl = generationFunction(a, b, currentIteration);
+							bbr = generationFunction(a + stepSize, b, currentIteration);
+							bfr = generationFunction(a + stepSize, b, currentIteration + stepSize);
+							bfl = generationFunction(a, b, currentIteration + stepSize);
+							tbl = generationFunction(a, b + stepSize, currentIteration);
+							tbr = generationFunction(a + stepSize, b + stepSize, currentIteration);
+							tfr = generationFunction(a + stepSize, b + stepSize, currentIteration + stepSize);
+							tfl = generationFunction(a, b + stepSize, currentIteration + stepSize);
+
+							index = 0;
+							if (test(bbl)) index |= BOTTOM_BACK_LEFT;
+							if (test(bbr)) index |= BOTTOM_BACK_RIGHT;
+							if (test(bfr)) index |= BOTTOM_FRONT_RIGHT;
+							if (test(bfl)) index |= BOTTOM_FRONT_LEFT;
+							if (test(tbl)) index |= TOP_BACK_LEFT;
+							if (test(tbr)) index |= TOP_BACK_RIGHT;
+							if (test(tfr)) index |= TOP_FRONT_RIGHT;
+							if (test(tfl)) index |= TOP_FRONT_LEFT;
+
+							verts = marching_cubes_lut[index];
+							add_triangles(verts, a, b, currentIteration);
+							break;
+							
+					}
+				}
+			}
+
+			currentIteration += stepSize;
+			if (currentIteration > maxCoord){
+				finished = true;
+				std::cout << "Done generating!" << std::endl;
+			} 
 		}
 
 		// Compares a value to the iso value based on the selected comparator
@@ -213,7 +317,7 @@ class MarchingCubes{
 		}
 	public:
 		bool finished = false;	// Becomes true when the mesh is finished generating (for incremental modes)
-		MarchingCubes(std::function<float(float, float, float)> f, float isoval, float min, float max, float step, CubesMode mode = Full, CompareOperation comp = GreaterEqual){
+		MarchingCubes(std::function<float(float, float, float)> f, float isoval, float min, float max, float step, CubesMode mode = Full, CompareOperation comp = Less){
 			generationFunction = f;
 			isoValue = isoval;
 			minCoord = min;
@@ -221,6 +325,7 @@ class MarchingCubes{
 			stepSize = step;
 			generationMode = mode;
 			comparator = comp;
+			currentIteration = minCoord;
 		}
 
 		void generate(){
@@ -229,22 +334,25 @@ class MarchingCubes{
 					generateFull();
 					break;
 				case Incremental_X:
+					generateIterative();
+					break;
 				case Incremental_Y:
 				case Incremental_Z:
+					generateIterative();
 					break;
 			}
 		}
 
-		// Returns a pointer to the vertices list for populating buffers
-		std::vector<float> *getVertexListPtr(){
-			return &vertices;
+		// Returns the vertices list for populating buffers
+		std::vector<float> getVertices(){
+			return vertices;
 		}
 };
 
 // Generates a list of normals for a list of vertices
-std::vector<float> generateNormals(std::vector<float> *vertices){
+std::vector<float> generateNormals(std::vector<float> vertices){
 	std::vector<float> normals;
-	int size = vertices->size();
+	int size = vertices.size();
 	if (size < 9) return normals;
 	for (int i = 8; i < size; i += 9){
 		// Putting the iterator at the end of a vertex means it won't break if, for some reason,
@@ -268,6 +376,123 @@ std::vector<float> generateNormals(std::vector<float> *vertices){
 	}
 	return normals;
 }
+
+class Plane {
+
+public:
+	enum PLANE_WHICH {
+		x,
+		y,
+		z
+	};
+
+private:
+	PLANE_WHICH plane = PLANE_WHICH::x;
+
+	glm::vec4 color = glm::vec4(0.9f, 0.9f, 0.9f, 0.1f);
+
+	GLfloat size;
+
+public:
+
+
+
+	Plane(GLfloat sz) : size(sz) {} 
+
+	void draw() {
+
+		glMatrixMode(GL_MODELVIEW);
+		glPushMatrix();
+
+		glEnable(GL_BLEND);
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+		if (plane == PLANE_WHICH::x) {
+		glBegin(GL_QUADS);
+
+		glColor4f(color.x, color.y, color.z, color.w);
+			glVertex3f(-size, 0.0f, -size);
+			glVertex3f(size, 0.0f, -size);
+			glVertex3f(size, 0.0f, size);
+			glVertex3f(-size, 0.0f, size);
+		
+		glEnd();
+
+		glBegin(GL_LINES);
+		glColor4f(color.x, color.y, color.z, color.w+0.2f);
+
+			for (int i = -size; i < size; ++i) {
+				glVertex3f(1.0f*i, 0.0f, -size);				
+				glVertex3f(1.0f*i, 0.0f, size);	
+				glVertex3f(size, 0.0f, 1.0f*i);				
+				glVertex3f(-size, 0.0f, 1.0f*i);				
+			}
+		glEnd();
+
+		}
+
+
+		glPopMatrix();
+		glDisable(GL_BLEND);
+	}
+
+};
+
+class Axes {
+
+	glm::vec3 origin;
+	glm::vec3 extents;
+
+	glm::vec3 xcol = glm::vec3(1.0f, 0.0f, 0.0f);
+	glm::vec3 ycol = glm::vec3(0.0f, 1.0f, 0.0f);
+	glm::vec3 zcol = glm::vec3(0.0f, 0.0f, 1.0f);
+
+public:
+
+	Axes(glm::vec3 orig, glm::vec3 ex) : origin(orig), extents(ex) {}
+
+	void draw() {
+
+		glMatrixMode( GL_MODELVIEW );
+		glPushMatrix();
+
+
+		glLineWidth(2.0f);
+		glBegin(GL_LINES);
+		glColor3f(xcol.x, xcol.y, xcol.z);
+		glVertex3f(origin.x, origin.y, origin.z);
+		glVertex3f(origin.x + extents.x, origin.y, origin.z);
+
+		glVertex3f(origin.x + extents.x, origin.y, origin.z);
+		glVertex3f(origin.x + extents.x, origin.y, origin.z+0.1);
+		glVertex3f(origin.x + extents.x, origin.y, origin.z);
+		glVertex3f(origin.x + extents.x, origin.y, origin.z-0.1);
+
+		glColor3f(ycol.x, ycol.y, ycol.z);
+		glVertex3f(origin.x, origin.y, origin.z);
+		glVertex3f(origin.x, origin.y + extents.y, origin.z);
+
+		glVertex3f(origin.x, origin.y + extents.y, origin.z);
+		glVertex3f(origin.x, origin.y + extents.y, origin.z+0.1);
+		glVertex3f(origin.x, origin.y + extents.y, origin.z);
+		glVertex3f(origin.x, origin.y + extents.y, origin.z-0.1);
+		
+		glColor3f(zcol.x, zcol.y, zcol.z);
+		glVertex3f(origin.x, origin.y, origin.z);
+		glVertex3f(origin.x, origin.y, origin.z + extents.z);
+		
+		glVertex3f(origin.x, origin.y, origin.z + extents.z);
+		glVertex3f(origin.x+0.1, origin.y, origin.z + extents.z);
+
+		glVertex3f(origin.x, origin.y, origin.z + extents.z);
+		glVertex3f(origin.x-0.1, origin.y, origin.z + extents.z);
+		glEnd();
+
+
+		glPopMatrix();
+	}
+
+};
 
 int main(){
 	std::vector<float> normals;
@@ -297,6 +522,8 @@ int main(){
 	}
 
 	glClearColor(0, 0, 0, 1);
+	glEnable(GL_DEPTH_TEST);
+	glDepthFunc(GL_LESS);
 
 	// Set up initial MVP matrix
 	glm::mat4 mvp;
@@ -308,7 +535,9 @@ int main(){
 	glm::mat4 model = glm::mat4(1.0f);
 	mvp = projection * view * model;
 
-	MarchingCubes cubes(f, DEFAULT_ISO, DEFAULT_MIN, DEFAULT_MAX, DEFAULT_STEP);
+	MarchingCubes cubes(f, DEFAULT_ISO, DEFAULT_MIN, DEFAULT_MAX, DEFAULT_STEP, Incremental_Z);
+	Axes ax(glm::vec3(DEFAULT_MIN), glm::vec3(DEFAULT_MAX - DEFAULT_MIN));
+
 
 	// Set up the VAO and buffers
 	GLuint vao, vertexVBO, normalVBO, programID;
@@ -317,25 +546,27 @@ int main(){
 	// Vertex VBO
 	glGenBuffers(1, &vertexVBO);
 	glBindBuffer(GL_ARRAY_BUFFER, vertexVBO);
-	glBufferData(GL_ARRAY_BUFFER, 0, cubes.getVertexListPtr(), GL_STATIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, 0, &cubes.getVertices()[0], GL_DYNAMIC_DRAW);
+	glEnableVertexAttribArray(0);
 	glVertexAttribPointer(
 		0,
 		3,
 		GL_FLOAT,
 		GL_FALSE,
-		sizeof(GL_FLOAT) * 3,
+		0,
 		(void*)0
 	);
 	// Normal VBO
 	glGenBuffers(1, &normalVBO);
 	glBindBuffer(GL_ARRAY_BUFFER, normalVBO);
-	glBufferData(GL_ARRAY_BUFFER, 0, &normals, GL_STATIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, 0, &normals, GL_DYNAMIC_DRAW);
+	glEnableVertexAttribArray(1);
 	glVertexAttribPointer(
 		1,
 		3,
 		GL_FLOAT,
 		GL_FALSE,
-		sizeof(GL_FLOAT) * 3,
+		0,
 		(void*)0
 	);
 	glBindVertexArray(0);
@@ -356,25 +587,90 @@ int main(){
 	glDeleteShader(vertexShaderID);
 	glDeleteShader(fragmentShaderID);
 
+	glClear(GL_COLOR_BUFFER_BIT);
+	glfwSwapBuffers(window);
 
+	// Variables for input
+	double mouseX = 0;
+	double mouseY = 0;
+	double prevMouseX = 0;
+	double prevMouseY = 0;
+
+	// Camera position spherical coords
+	float r = 5.0f;
+	float theta = 45.0f;
+	float phi = 45.0f;
+
+	double prevTime = glfwGetTime();
 
 	while (!glfwWindowShouldClose(window)){
-		// Todo: Process input for camera movement
-		// eyePos = ...
-		// view = lookAt(eyePos, zero, up);
-		// mvp = projection * view * model;
+		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+		// Get delta time
+		double currentTime = glfwGetTime();
+		float deltaTime = currentTime - prevTime;
+		prevTime = currentTime;
+
+
+		// Mouse dragging
+		glfwGetCursorPos(window, &mouseX, &mouseY);
+		if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS){
+			// Move the camera
+			phi = glm::clamp(phi - (mouseY - prevMouseY), 0.0001, 179.9999);	// If phi is exactly 0 or 180 weird things happen
+			theta += (mouseX - prevMouseX);
+		}
+		// Zoom with arrow keys
+		if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS){
+			// Zoom in (clamp to almost zero)
+			r = glm::clamp(r - ZOOM_SPEED * deltaTime, 0.1f, 1000.0f);
+		}
+		if (glfwGetKey(window, GLFW_KEY_DOWN) == GLFW_PRESS){
+			// Zoom out (no limit)
+			r += ZOOM_SPEED * deltaTime;
+		}
+
+		eyePos = {r * cos(glm::radians(theta)) * sin(glm::radians(phi)), r * cos(glm::radians(phi)), r * sin(glm::radians(theta)) * sin(glm::radians(phi))};
+		view = glm::lookAt(eyePos, zero, up);
+		mvp = projection * view * model;
 
 		// Generate more of the mesh if it's not done yet (also update vertex and normal buffers)
 		if (!cubes.finished){
 			cubes.generate();
+			std::vector<float> vertices = cubes.getVertices();
+			normals = generateNormals(vertices);
+
+			// Update buffers
+			glBindVertexArray(vao);
+			glBindBuffer(GL_ARRAY_BUFFER, normalVBO);
+			glBufferData(GL_ARRAY_BUFFER, normals.size() * sizeof(GL_FLOAT), &normals[0], GL_DYNAMIC_DRAW);
+			glBindBuffer(GL_ARRAY_BUFFER, vertexVBO);
+			glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(GL_FLOAT), &vertices[0], GL_DYNAMIC_DRAW);
+			glBindVertexArray(0);
 		}
 		else{
 			// Todo: Save the mesh to a file
 		}
 
-		// Draw the mesh
-		
+		// Draw the axes
+		glMatrixMode(GL_PROJECTION);
+		glPushMatrix();
+		glLoadMatrixf(glm::value_ptr(projection));
+		glMatrixMode(GL_MODELVIEW);
+		glPushMatrix();
+		glLoadMatrixf(glm::value_ptr(view));
+		ax.draw();
 
+		// Draw the mesh
+		glUseProgram(programID);		
+		GLuint matrixID = glGetUniformLocation(programID, "MVP");
+		glUniformMatrix4fv(matrixID, 1, GL_FALSE, &mvp[0][0]);
+		glBindVertexArray(vao);
+		glDrawArrays(GL_TRIANGLES, 0, normals.size());
+		glBindVertexArray(0);
+		glUseProgram(0);
+
+		prevMouseX = mouseX;
+		prevMouseY = mouseY;
 
 		glfwPollEvents();
 		glfwSwapBuffers(window);
