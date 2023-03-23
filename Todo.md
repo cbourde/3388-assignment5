@@ -7,3 +7,5 @@
 	[x] Zoom
 [ ] Lighting Shader
 [ ] Generate PLY file
+[x] Draw box
+[ ] Parse command line args

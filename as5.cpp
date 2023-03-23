@@ -80,9 +80,9 @@ class MarchingCubes{
 			int index;
 			int* verts;
 
-			for (float x = minCoord; x <= maxCoord; x += stepSize){
-				for (float y = minCoord; y <= maxCoord; y += stepSize){
-					for (float z = minCoord; z <= maxCoord; z += stepSize){
+			for (float x = minCoord; x < maxCoord; x += stepSize){
+				for (float y = minCoord; y < maxCoord; y += stepSize){
+					for (float z = minCoord; z < maxCoord; z += stepSize){
 						// Test the 8 points
 						bbl = generationFunction(x, y, z);
 						bbr = generationFunction(x + stepSize, y, z);
@@ -117,8 +117,8 @@ class MarchingCubes{
 			int index;
 			int* verts;
 			
-			for (float a = minCoord; a <= maxCoord; a += stepSize){
-				for (float b = minCoord; b <= maxCoord; b += stepSize){
+			for (float a = minCoord; a < maxCoord; a += stepSize){
+				for (float b = minCoord; b < maxCoord; b += stepSize){
 					switch (generationMode){
 						case Incremental_X:
 							// A is Y, B is Z
@@ -377,67 +377,6 @@ std::vector<float> generateNormals(std::vector<float> vertices){
 	return normals;
 }
 
-class Plane {
-
-public:
-	enum PLANE_WHICH {
-		x,
-		y,
-		z
-	};
-
-private:
-	PLANE_WHICH plane = PLANE_WHICH::x;
-
-	glm::vec4 color = glm::vec4(0.9f, 0.9f, 0.9f, 0.1f);
-
-	GLfloat size;
-
-public:
-
-
-
-	Plane(GLfloat sz) : size(sz) {} 
-
-	void draw() {
-
-		glMatrixMode(GL_MODELVIEW);
-		glPushMatrix();
-
-		glEnable(GL_BLEND);
-		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-		if (plane == PLANE_WHICH::x) {
-		glBegin(GL_QUADS);
-
-		glColor4f(color.x, color.y, color.z, color.w);
-			glVertex3f(-size, 0.0f, -size);
-			glVertex3f(size, 0.0f, -size);
-			glVertex3f(size, 0.0f, size);
-			glVertex3f(-size, 0.0f, size);
-		
-		glEnd();
-
-		glBegin(GL_LINES);
-		glColor4f(color.x, color.y, color.z, color.w+0.2f);
-
-			for (int i = -size; i < size; ++i) {
-				glVertex3f(1.0f*i, 0.0f, -size);				
-				glVertex3f(1.0f*i, 0.0f, size);	
-				glVertex3f(size, 0.0f, 1.0f*i);				
-				glVertex3f(-size, 0.0f, 1.0f*i);				
-			}
-		glEnd();
-
-		}
-
-
-		glPopMatrix();
-		glDisable(GL_BLEND);
-	}
-
-};
-
 class Axes {
 
 	glm::vec3 origin;
@@ -489,15 +428,43 @@ public:
 		glEnd();
 
 
-		glPopMatrix();
+		//glPopMatrix();
 	}
 
 };
+
+void draw_box(float min, float max){
+	glColor3f(1.0f, 1.0f, 1.0f);
+	glBegin(GL_LINE_STRIP);
+		glVertex3f(min, min, min);
+		glVertex3f(max, min, min);
+		glVertex3f(max, max, min);
+		glVertex3f(min, max, min);
+		glVertex3f(min, min, min);
+		glVertex3f(min, min, max);
+		glVertex3f(max, min, max);
+		glVertex3f(max, max, max);
+		glVertex3f(min, max, max);
+		glVertex3f(min, min, max);
+	glEnd();
+	glBegin(GL_LINES);
+		glVertex3f(min, max, min);
+		glVertex3f(min, max, max);
+		glVertex3f(max, max, min);
+		glVertex3f(max, max, max);
+		glVertex3f(max, min, min);
+		glVertex3f(max, min, max);
+	glEnd();
+}
 
 int main(){
 	std::vector<float> normals;
 
 	// Todo: Command line args for step size, min, max, iso
+	float step = DEFAULT_STEP;
+	float min = DEFAULT_MIN;
+	float max = DEFAULT_MAX;
+	float isoval = DEFAULT_ISO;
 
 	// Initialize window
 	if (!glfwInit()){
@@ -535,8 +502,8 @@ int main(){
 	glm::mat4 model = glm::mat4(1.0f);
 	mvp = projection * view * model;
 
-	MarchingCubes cubes(f, DEFAULT_ISO, DEFAULT_MIN, DEFAULT_MAX, DEFAULT_STEP, Incremental_Z);
-	Axes ax(glm::vec3(DEFAULT_MIN), glm::vec3(DEFAULT_MAX - DEFAULT_MIN));
+	MarchingCubes cubes(f, isoval, min, max, step, Incremental_Z);
+	Axes ax(glm::vec3(min), glm::vec3(max - min));
 
 
 	// Set up the VAO and buffers
@@ -651,7 +618,7 @@ int main(){
 			// Todo: Save the mesh to a file
 		}
 
-		// Draw the axes
+		// Draw the axes and box
 		glMatrixMode(GL_PROJECTION);
 		glPushMatrix();
 		glLoadMatrixf(glm::value_ptr(projection));
@@ -659,6 +626,7 @@ int main(){
 		glPushMatrix();
 		glLoadMatrixf(glm::value_ptr(view));
 		ax.draw();
+		draw_box(min, max);
 
 		// Draw the mesh
 		glUseProgram(programID);		
