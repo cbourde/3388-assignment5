@@ -27,19 +27,18 @@
 
 // Function that generates the surface
 float f(float x, float y, float z){
-	return y - (sin(x) * cos(z));
-}
-
-float f2(float x, float y, float z){
-	return x;
+	//return y - (sin(x) * cos(z));
+	return x * x - y * y - z * z - z;
 }
 
 // Default parameters
-const float DEFAULT_ISO = 0.05f;
-const float DEFAULT_MIN = -3.0f;
-const float DEFAULT_MAX = 3.0f;
-const float DEFAULT_STEP = 0.02f;
-const float ZOOM_SPEED = 2.0f;
+const float DEFAULT_ISO = -1.5f;
+const float DEFAULT_MIN = -8.0f;
+const float DEFAULT_MAX = 8.0f;
+const float DEFAULT_STEP = 0.05f;
+const float ZOOM_SPEED = 4.0f;
+const GLfloat MODEL_COLOR[4] = {0.0f, 0.8f, 0.3f, 1.0f};
+const GLfloat LIGHT_DIRECTION[3] = {1.0f, 1.5f, 1.0f};
 
 GLFWwindow* window;
 
@@ -457,7 +456,52 @@ void draw_box(float min, float max){
 	glEnd();
 }
 
-int main(){
+void writePLY(std::string filename, std::vector<float> vertices, std::vector<float> normals){
+	// Create file
+	std::ofstream file(filename);
+	if (file.fail()){
+		printf("Error creating file\n");
+		return;
+	}
+
+	int numVertices = vertices.size() / 3;
+	int numFaces = numVertices / 3;
+
+	// Write header
+	file << "ply" << std::endl;
+	file << "format ascii 1.0" << std::endl;
+	file << "element vertex " << numVertices << std::endl;
+	file << "property float x" << std::endl;
+	file << "property float y" << std::endl;
+	file << "property float z" << std::endl;
+	file << "property float nx" << std::endl;
+	file << "property float ny" << std::endl;
+	file << "property float nz" << std::endl;
+	file << "element face " << numFaces << std::endl;
+	file << "property list uchar uint vertex_indices" << std::endl;
+	file << "end_header" << std::endl;
+
+	// Write vertices
+	int total = vertices.size() / 10000;
+	for (int i = 2; i < vertices.size(); i += 3){
+		file << vertices[i - 2] << " " << vertices[i - 1] << " " << vertices[i] << " " << normals[i - 2] << " " << normals[i - 1] << " " << normals[i] << std::endl;
+		if (i % 10000 == 0)
+			std::cout << "Writing vertices: " << i / 10000 << " / " << total << std::endl;
+	}
+
+	// Write faces
+	total = numVertices / 10000;
+	for (int i = 2; i < numVertices; i+= 3){
+		file << "3 " << i - 2 << " " << i - 1 << " " << i << std::endl;
+		if (i % 10000 == 0)
+			std::cout << "Writing faces: " << i / 10000 << " / " << total << std::endl;
+	}
+
+	printf("Finished writing file!\n");
+	file.close();
+}
+
+int main(int argc, char* argv[]){
 	std::vector<float> normals;
 
 	// Todo: Command line args for step size, min, max, iso
@@ -465,6 +509,70 @@ int main(){
 	float min = DEFAULT_MIN;
 	float max = DEFAULT_MAX;
 	float isoval = DEFAULT_ISO;
+	CubesMode mode = Incremental_Z;
+	std::string filename = "test.ply";
+	bool generateFile = true;
+
+	try{
+		if (argc > 1){
+			filename = argv[1];
+		}
+		else{
+			generateFile = false;
+		}
+		if (argc > 2){
+			min = std::stof(argv[2]);
+			max = std::stof(argv[3]);
+		}
+		if (argc > 4){
+			step = std::stof(argv[4]);
+		}
+		if (argc > 5){
+			isoval = std::stof(argv[5]);
+		}
+		if (argc > 6){
+			if (strcmp(argv[6], "f") == 0){
+				mode = Full;
+			}
+			else if (strcmp(argv[6], "x") == 0){
+				mode = Incremental_X;
+			}
+			else if (strcmp(argv[6], "y") == 0){
+				mode = Incremental_Y;
+			}
+			else if (strcmp(argv[6], "z") == 0){
+				mode = Incremental_Z;
+			}
+			else{
+				printf("Mode must be one of: f, x, y, z\n");
+				return -1;
+			}
+		}
+	}
+	catch (...){
+		printf("Usage: as5 filename min max step iso mode\n");
+		printf("min, max, step, iso must be numbers\n");
+		return -1;
+	}
+	if (max <= min){
+		printf("Max must be greater than min\n");
+		std::cout << max << " " << min;
+		return -1;
+	}
+	if (step <= 0){
+		printf("Step must be positive\n");
+		return -1;
+	}
+	if (!generateFile){
+		printf("No filename specified. No PLY file will be generated.\n");
+	}
+
+	float slowness = (max - min) / step;
+	if (slowness > 300 && mode == Full){
+		printf("Warning: You picked Full mode with a very small step size and/or large mesh dimensions. Mesh generation will be slow and the program will be unresponsive for a while.\n");
+	}
+
+
 
 	// Initialize window
 	if (!glfwInit()){
@@ -502,7 +610,7 @@ int main(){
 	glm::mat4 model = glm::mat4(1.0f);
 	mvp = projection * view * model;
 
-	MarchingCubes cubes(f, isoval, min, max, step, Incremental_Z);
+	MarchingCubes cubes(f, isoval, min, max, step, mode);
 	Axes ax(glm::vec3(min), glm::vec3(max - min));
 
 
@@ -569,6 +677,7 @@ int main(){
 	float phi = 45.0f;
 
 	double prevTime = glfwGetTime();
+	bool wroteFile = false;
 
 	while (!glfwWindowShouldClose(window)){
 		glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -614,8 +723,11 @@ int main(){
 			glBufferData(GL_ARRAY_BUFFER, vertices.size() * sizeof(GL_FLOAT), &vertices[0], GL_DYNAMIC_DRAW);
 			glBindVertexArray(0);
 		}
-		else{
-			// Todo: Save the mesh to a file
+		else if (!wroteFile && generateFile){
+			std::vector<float> vertices = cubes.getVertices();
+			normals = generateNormals(vertices);
+			writePLY(filename, vertices, normals);
+			wroteFile = true;
 		}
 
 		// Draw the axes and box
@@ -629,9 +741,21 @@ int main(){
 		draw_box(min, max);
 
 		// Draw the mesh
-		glUseProgram(programID);		
-		GLuint matrixID = glGetUniformLocation(programID, "MVP");
+		glUseProgram(programID);
+
+		// Set up uniforms		
+		GLuint matrixID = glGetUniformLocation(programID, "MVP");		
 		glUniformMatrix4fv(matrixID, 1, GL_FALSE, &mvp[0][0]);
+
+		GLuint viewID = glGetUniformLocation(programID, "V");
+		glUniformMatrix4fv(viewID, 1, GL_FALSE, &view[0][0]);
+
+		GLuint colorID = glGetUniformLocation(programID, "modelColor");
+		glUniform4fv(colorID, 1, MODEL_COLOR);
+
+		GLuint lightDirID = glGetUniformLocation(programID, "lightDir");
+		glUniform3fv(lightDirID, 1, LIGHT_DIRECTION);
+
 		glBindVertexArray(vao);
 		glDrawArrays(GL_TRIANGLES, 0, normals.size());
 		glBindVertexArray(0);

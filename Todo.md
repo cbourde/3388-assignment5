@@ -5,7 +5,7 @@
 [x] Camera Movement
 	[x] Rotation
 	[x] Zoom
-[ ] Lighting Shader
+[x] Lighting Shader
 [ ] Generate PLY file
 [x] Draw box
 [ ] Parse command line args
