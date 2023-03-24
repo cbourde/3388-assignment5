@@ -27,15 +27,16 @@
 
 // Function that generates the surface
 float f(float x, float y, float z){
-	//return y - (sin(x) * cos(z));
-	return x * x - y * y - z * z - z;
+	//return y - (sin(x) * cos(z));		// Example 1 from assignment instructions (wavy surface)
+	//return x * x - y * y - z * z - z;	// Example 2 from assignment instructions (tube thing)
+	return x * x + y * y + z * z;		// Draws a sphere with radius = isoval
 }
 
 // Default parameters
-const float DEFAULT_ISO = -1.5f;
-const float DEFAULT_MIN = -8.0f;
-const float DEFAULT_MAX = 8.0f;
-const float DEFAULT_STEP = 0.05f;
+const float DEFAULT_ISO = 1.0f;
+const float DEFAULT_MIN = -2.0f;
+const float DEFAULT_MAX = 2.0f;
+const float DEFAULT_STEP = 0.01f;
 const float ZOOM_SPEED = 4.0f;
 const GLfloat MODEL_COLOR[4] = {0.0f, 0.8f, 0.3f, 1.0f};
 const GLfloat LIGHT_DIRECTION[3] = {1.0f, 1.5f, 1.0f};
@@ -646,7 +647,7 @@ int main(int argc, char* argv[]){
 	);
 	glBindVertexArray(0);
 
-	// Shaders (Todo: Write the lighting shader)
+	// Shaders
 	GLuint vertexShaderID = glCreateShader(GL_VERTEX_SHADER);
 	GLuint fragmentShaderID = glCreateShader(GL_FRAGMENT_SHADER);
 	glShaderSource(vertexShaderID, 1, &vertexShader, NULL);
@@ -663,7 +664,7 @@ int main(int argc, char* argv[]){
 	glDeleteShader(fragmentShaderID);
 
 	glClear(GL_COLOR_BUFFER_BIT);
-	glfwSwapBuffers(window);
+	glfwSwapBuffers(window);	// Swap buffers once so the screen is at least black instead of glitchy during Full mesh generation
 
 	// Variables for input
 	double mouseX = 0;
@@ -724,6 +725,7 @@ int main(int argc, char* argv[]){
 			glBindVertexArray(0);
 		}
 		else if (!wroteFile && generateFile){
+			// Mesh is done - generate file if enabled
 			std::vector<float> vertices = cubes.getVertices();
 			normals = generateNormals(vertices);
 			writePLY(filename, vertices, normals);

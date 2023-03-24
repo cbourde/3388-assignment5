@@ -6,6 +6,6 @@
 	[x] Rotation
 	[x] Zoom
 [x] Lighting Shader
-[ ] Generate PLY file
+[x] Generate PLY file
 [x] Draw box
-[ ] Parse command line args
+[x] Parse command line args
